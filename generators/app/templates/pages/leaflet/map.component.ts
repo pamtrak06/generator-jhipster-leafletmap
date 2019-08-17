@@ -1,12 +1,15 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
 import { HttpResponse, HttpErrorResponse } from '@angular/common/http';
 import { ActivatedRoute, Router } from '@angular/router';
-import { Subscription } from 'rxjs/Rx';
+import { Subscription } from 'rxjs';
 import { JhiEventManager, JhiParseLinks, JhiAlertService } from 'ng-jhipster';
 import { icon, latLng, marker, point, polyline, tileLayer } from 'leaflet';
 import { Map } from './map.model';
+
+import { AccountService } from 'app/core';
+
+import { ITEMS_PER_PAGE } from 'app/shared';
 import { MapService } from './map.service';
-import { Principal } from 'app/core';
 
 @Component({
     selector: 'jhi-map',
@@ -70,34 +73,77 @@ export class MapComponent implements OnInit, OnDestroy {
         center: latLng([46.4547, 2.2529])
     };
     constructor(
-        private mapService: MapService,
-        private parseLinks: JhiParseLinks,
-        private jhiAlertService: JhiAlertService,
-        private eventManager: JhiEventManager,
-        private principal: Principal
+        protected mapService: MapService,
+        protected jhiAlertService: JhiAlertService,
+        protected eventManager: JhiEventManager,
+        protected parseLinks: JhiParseLinks,
+        protected activatedRoute: ActivatedRoute,
+        protected accountService: AccountService
     ) {
+    this.itemsPerPage = ITEMS_PER_PAGE;
+    this.page = 0;
+    this.links = {
+      last: 0
+    };
+    this.predicate = 'id';
+    this.reverse = true;
+    this.activatedRoute.snapshot && this.activatedRoute.snapshot.params['search'] ? this.activatedRoute.snapshot.params['search'] : '';
+  }
+
+  loadAll() {
+  }
+
+  reset() {
+    this.page = 0;
+    this.loadAll();
+  }
+
+  loadPage(page) {
+    this.page = page;
+    this.loadAll();
+  }
+
+  clear() {
+    this.links = {
+      last: 0
+    };
+    this.page = 0;
+    this.predicate = 'id';
+    this.reverse = true;
+    this.loadAll();
+  }
+
+  search(query) {
+    if (!query) {
+      return this.clear();
     }
+    this.links = {
+      last: 0
+    };
+    this.page = 0;
+    this.predicate = '_score';
+    this.reverse = false;
+    this.loadAll();
+  }
 
-    ngOnInit() {
+  ngOnInit() {
+    this.loadAll();
+    this.accountService.identity().then(account => {
+      this.currentAccount = account;
+    });
+    this.registerChangeInMap();
+  }
 
-        this.principal.identity().then(account => {
-            this.currentAccount = account;
-        });
+  ngOnDestroy() {
+    this.eventManager.destroy(this.eventSubscriber);
+  }
 
-    }
+  registerChangeInMap() {
+    this.eventSubscriber = this.eventManager.subscribe('mapModification', response => this.reset());
+  }
 
-    ngOnDestroy() {
+  protected onError(errorMessage: string) {
+    this.jhiAlertService.error(errorMessage, null, null);
+  }
 
-    }
-
-    sort() {
-        const result = [this.predicate + ',' + (this.reverse ? 'asc' : 'desc')];
-        if (this.predicate !== 'id') {
-            result.push('id');
-        }
-        return result;
-    }
-    private onError(error) {
-        this.jhiAlertService.error(error.message, null, null);
-    }
 }
